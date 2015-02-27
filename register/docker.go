@@ -40,8 +40,6 @@ func (this *DockerRegister) RunAndWatch(disc *discovery.EtcdDiscovery) {
 
 func (this *DockerRegister) captureEvents(events chan *dockerapi.APIEvents) {
 	for msg := range events {
-		log.Printf("Event: %s %s", msg.ID, msg.Status)
-
 		container, err := this.docker.InspectContainer(msg.ID)
 		if err != nil {
 			log.Printf("Unable to inspect container %s, skipping", msg.ID)
@@ -49,13 +47,13 @@ func (this *DockerRegister) captureEvents(events chan *dockerapi.APIEvents) {
 		}
 
 		name := container.Config.Hostname + "." + container.Config.Domainname + "."
-		var running = regexp.MustCompile("start|^Up.*$").MatchString(msg.Status)
-		var stopping = regexp.MustCompile("die").MatchString(msg.Status)
+		var running = regexp.MustCompile("start|^Up.*$")
+		var stopping = regexp.MustCompile("die")
 
 		switch {
-		case running:
+		case running.MatchString(msg.Status):
 			log.Printf("Adding record for %v", name)
-		case stopping:
+		case stopping.MatchString(msg.Status):
 			log.Printf("Removing record for %v", name)
 		}
 	}
@@ -69,13 +67,38 @@ func (this *DockerRegister) registerContainer(containerId string) {
 	}
 
 	service := model.Service{ExposedIP: container.NetworkSettings.IPAddress}
-	log.Println(service)
 
-	for port, published := range container.HostConfig.PortBindings {
-		log.Println(port, published)
+	ip, port := this.getDefaultPort(container.HostConfig.PortBindings, container.NetworkSettings.Ports)
+
+	log.Println("Service ", service, ip, port)
+}
+
+func (this *DockerRegister) getDefaultPort(bindings, networks map[dockerapi.Port][]dockerapi.PortBinding) (string, string) {
+	var hostIP, hostPort string
+
+	for port, published := range networks {
+		if len(published) > 0 {
+			hostIP = published[0].HostIP
+		}
+
+		if len(published) > 1 {
+			hostPort = published[1].HostPort
+		}
+
+		log.Println("PortBindings ", hostIP, hostPort, port)
 	}
 
-	for port, published := range container.NetworkSettings.Ports {
-		log.Println(port, published)
+	for port, published := range bindings {
+		if len(published) > 0 {
+			hostIP = published[0].HostIP
+		}
+
+		if len(published) > 1 {
+			hostPort = published[1].HostPort
+		}
+
+		log.Println("PortNetworks ", hostIP, hostPort, port)
 	}
+
+	return hostIP, hostPort
 }
