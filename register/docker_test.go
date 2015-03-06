@@ -2,23 +2,49 @@ package register
 
 import (
 	dockerapi "github.com/fsouza/go-dockerclient"
+	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
-func TestShouldBeBindingGetDefaultPort(t *testing.T) {
-	reg := NewDockerRegister("unix://localhost.sock")
-	bindings := make(map[dockerapi.Port][]dockerapi.PortBinding)
-	networks := make(map[dockerapi.Port][]dockerapi.PortBinding)
+var reg *DockerRegister
+var bindings, networks map[dockerapi.Port][]dockerapi.PortBinding
 
-	bindings[dockerapi.Port("200")] = []dockerapi.PortBinding{dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100/tcp"}}
+func TestMain(m *testing.M) {
+	setup()
+	os.Exit(m.Run())
+}
 
-	ip, port := reg.getDefaultPort(bindings, networks)
+func setup() {
+	reg = NewDockerRegister("unix://localhost.sock")
+	reg.network = &NetworkFake{}
+	bindings = make(map[dockerapi.Port][]dockerapi.PortBinding)
+	networks = make(map[dockerapi.Port][]dockerapi.PortBinding)
+}
 
-	if ip != "0.0.0.0" {
-		t.Fatalf("Expected %s, but %s", "0.0.0.0", ip)
-	}
+func TestGetNetworkSettingsByNetwork(t *testing.T) {
+	networks[dockerapi.Port("100")] = []dockerapi.PortBinding{dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}, dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}}
 
-	if port != "100" {
-		t.Fatalf("Expected %s, but %s", "100", port)
-	}
+	ip, port := reg.getNetworkSettings(bindings, networks)
+
+	assert.Equal(t, "0.0.0.0", ip)
+	assert.Equal(t, "100", port)
+	assert.NotNil(t, reg.network)
+}
+
+func TestGetNetworkSettingsByBindinds(t *testing.T) {
+	bindings[dockerapi.Port("100")] = []dockerapi.PortBinding{dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}, dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}}
+
+	ip, port := reg.getNetworkSettings(bindings, networks)
+
+	assert.Equal(t, "0.0.0.0", ip)
+	assert.Equal(t, "100", port)
+	assert.NotNil(t, reg.network)
+}
+
+type NetworkFake struct {
+}
+
+func (this *NetworkFake) ResolverIP(ip string) string {
+	return "0.0.0.0"
 }

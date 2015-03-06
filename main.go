@@ -24,7 +24,6 @@ func main() {
 	log.Println("Listening for registers...")
 	reg.RunAndWatch(disc)
 
-	log.Println("Waiting for signals...")
 	StartUp()
 }
 
