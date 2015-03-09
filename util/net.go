@@ -17,7 +17,7 @@ func (this *InetAddress) ResolverIP(ip string) string {
 		return ip
 	}
 
-	local, err := lookup()
+	local, err := find()
 	if err != nil {
 		return ""
 	}
@@ -25,7 +25,7 @@ func (this *InetAddress) ResolverIP(ip string) string {
 	return local.String()
 }
 
-func lookup() (net.IP, error) {
+func find() (net.IP, error) {
 	tt, err := net.Interfaces()
 	if err != nil {
 		return nil, err
@@ -44,7 +44,7 @@ func lookup() (net.IP, error) {
 			}
 
 			v4 := ipnet.IP.To4()
-			if v4 == nil || v4[0] == 127 { // loopback address
+			if v4 == nil || v4[0] == 127 {
 				continue
 			}
 

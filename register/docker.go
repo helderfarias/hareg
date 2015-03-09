@@ -15,8 +15,26 @@ type DockerRegister struct {
 	network util.Network
 }
 
-func NewDockerRegister(dockerHost string) *DockerRegister {
-	docker, err := dockerapi.NewClient(dockerHost)
+var servicesCache map[string]model.Service
+
+func init() {
+	servicesCache = make(map[string]model.Service)
+}
+
+func NewDockerRegister(endpoint string) *DockerRegister {
+	docker, err := dockerapi.NewClient(endpoint)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return &DockerRegister{
+		docker:  docker,
+		network: &util.InetAddress{},
+	}
+}
+
+func NewDockerTLSRegister(endpoint, cert, key, ca string) *DockerRegister {
+	docker, err := dockerapi.NewTLSClient(endpoint, cert, key, ca)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,45 +49,49 @@ func (this *DockerRegister) RunAndWatch(disc *discovery.EtcdDiscovery) {
 	}
 
 	for _, listing := range containers {
-		this.registerContainer(listing.ID)
+		this.registerContainer(listing.ID, disc)
 	}
 
 	events := make(chan *dockerapi.APIEvents)
 	this.docker.AddEventListener(events)
-	go this.captureEvents(events)
+	go this.captureEvents(events, disc)
 }
 
-func (this *DockerRegister) captureEvents(events chan *dockerapi.APIEvents) {
+func (this *DockerRegister) captureEvents(events chan *dockerapi.APIEvents, disc *discovery.EtcdDiscovery) {
 	for msg := range events {
-		container, err := this.docker.InspectContainer(msg.ID)
-		if err != nil {
-			log.Printf("Unable to inspect container %s - %s, skipping", msg.ID, err)
-			return
-		}
-
-		//name := container.Config.Hostname + "." + container.Config.Domainname + "."
 		var running = regexp.MustCompile("start|^Up.*$")
 		var stopping = regexp.MustCompile("die")
 
 		switch {
 		case running.MatchString(msg.Status):
-			this.registerContainer(container.ID)
+			this.registerContainer(msg.ID[:12], disc)
 		case stopping.MatchString(msg.Status):
-			this.removeContainer(container.ID)
+			this.removeContainer(msg.ID[:12], disc)
 		}
 	}
 }
 
-func (this *DockerRegister) removeContainer(containerId string) {
-	log.Println("Container removed", containerId)
+func (this *DockerRegister) removeContainer(containerId string, disc *discovery.EtcdDiscovery) {
+	service := servicesCache[containerId]
+
+	if service.ContainerID != "" {
+		err := disc.RemoveService(service)
+
+		if err == nil {
+			delete(servicesCache, service.ContainerID)
+		}
+	}
 }
 
-func (this *DockerRegister) registerContainer(containerId string) {
-	log.Println("Container added", containerId)
-
+func (this *DockerRegister) registerContainer(containerId string, disc *discovery.EtcdDiscovery) {
 	container, err := this.docker.InspectContainer(containerId)
 	if err != nil {
 		log.Println("unable to inspect container:", containerId[:12], err)
+		return
+	}
+
+	domain, endpoint := this.getServiceDomain(container)
+	if len(domain) == 0 || len(endpoint) == 0 {
 		return
 	}
 
@@ -80,8 +102,14 @@ func (this *DockerRegister) registerContainer(containerId string) {
 	service.ExposedIP = this.mapperIP(ip, container)
 	service.ContainerID = container.ID[0:12]
 	service.ContainerHostName = container.Name[1:]
+	service.Domain = domain
+	service.Endpoint = endpoint
 
-	log.Println("Service ", service)
+	errService := disc.AddService(service)
+
+	if errService == nil {
+		servicesCache[service.ContainerID] = service
+	}
 }
 
 func (this *DockerRegister) getNetworkSettings(bindings, networks map[dockerapi.Port][]dockerapi.PortBinding) (string, string) {
@@ -132,4 +160,17 @@ func (this *DockerRegister) mapperIP(ip string, container *dockerapi.Container) 
 	}
 
 	return this.network.ResolverIP(ip)
+}
+
+func (this *DockerRegister) getServiceDomain(container *dockerapi.Container) (domain, endpoint string) {
+	for _, env := range container.Config.Env {
+		if strings.HasPrefix(env, "SERVICE_DOMAIN") {
+			pairs := strings.Split(env, "=")[1]
+			domain := strings.Split(pairs, ":")[0]
+			endpoint := strings.Split(pairs, ":")[1]
+			return domain, endpoint
+		}
+	}
+
+	return "", ""
 }
