@@ -21,9 +21,8 @@ func main() {
 
 	disc := discovery.NewEtcdDiscovery(*etcdHost)
 
-	reg := selectRegister()
-
 	log.Println("Listening for registers...")
+	reg := selectRegister()
 	reg.RunAndWatch(disc)
 
 	StartUp()

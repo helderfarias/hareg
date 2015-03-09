@@ -8,11 +8,13 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type DockerRegister struct {
 	docker  *dockerapi.Client
 	network util.Network
+	sync.RWMutex
 }
 
 var servicesCache map[string]model.Service
@@ -75,11 +77,13 @@ func (this *DockerRegister) removeContainer(containerId string, disc *discovery.
 	service := servicesCache[containerId]
 
 	if service.ContainerID != "" {
+		this.Lock()
 		err := disc.RemoveService(service)
 
 		if err == nil {
 			delete(servicesCache, service.ContainerID)
 		}
+		this.Unlock()
 	}
 }
 
@@ -105,11 +109,13 @@ func (this *DockerRegister) registerContainer(containerId string, disc *discover
 	service.Domain = domain
 	service.Endpoint = endpoint
 
+	this.Lock()
 	errService := disc.AddService(service)
 
 	if errService == nil {
 		servicesCache[service.ContainerID] = service
 	}
+	this.Unlock()
 }
 
 func (this *DockerRegister) getNetworkSettings(bindings, networks map[dockerapi.Port][]dockerapi.PortBinding) (string, string) {
