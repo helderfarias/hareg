@@ -2,6 +2,7 @@
 
 ## Service Register
 
-TODO:
-  docker run -d -P -e SERVICE_DOMAIN="sigex:/api" microservice
-  docker run -d -P -e SERVICE_DOMAIN="icone:/icone" icone
+```
+  docker run -d -P -e SERVICE_DOMAIN="app01:/api" microservice
+  docker run -d -P -e SERVICE_DOMAIN="app02:/icon" icon
+```
