@@ -94,12 +94,12 @@ func (this *DockerRegister) registerContainer(containerId string, disc *discover
 		return
 	}
 
-	domain, endpoint := this.getServiceDomain(container)
+	domain, endpoint, portDefault := this.getServiceDomain(container)
 	if len(domain) == 0 || len(endpoint) == 0 {
 		return
 	}
 
-	ip, port := this.getNetworkSettings(container.HostConfig.PortBindings, container.NetworkSettings.Ports)
+	ip, port := this.getNetworkSettings(portDefault, container.HostConfig.PortBindings, container.NetworkSettings.Ports)
 
 	service := model.Service{}
 	service.ExposedPort = this.mapperPort(port, container)
@@ -118,24 +118,48 @@ func (this *DockerRegister) registerContainer(containerId string, disc *discover
 	this.Unlock()
 }
 
-func (this *DockerRegister) getNetworkSettings(bindings, networks map[dockerapi.Port][]dockerapi.PortBinding) (string, string) {
+func (this *DockerRegister) getNetworkSettings(portDefault string, bindings, networks map[dockerapi.Port][]dockerapi.PortBinding) (string, string) {
 	var hostIP, hostPort string
 
 	for port, published := range bindings {
 		if len(published) > 0 {
-			hostIP = published[0].HostIP
-			hostPort = published[0].HostPort
+			for _, item := range published {
+				if hostPort == portDefault {
+					hostIP = item.HostIP
+					hostPort = item.HostPort
+					break
+				} else {
+					hostIP = item.HostIP
+					hostPort = item.HostPort
+				}
+			}
 		} else {
 			hostPort = string(port)
+		}
+
+		if hostPort == portDefault {
+			break
 		}
 	}
 
 	for port, published := range networks {
 		if len(published) > 0 {
-			hostIP = published[0].HostIP
-			hostPort = published[0].HostPort
+			for _, item := range published {
+				if hostPort == portDefault {
+					hostIP = item.HostIP
+					hostPort = item.HostPort
+					break
+				} else {
+					hostIP = item.HostIP
+					hostPort = item.HostPort
+				}
+			}
 		} else {
 			hostPort = string(port)
+		}
+
+		if hostPort == portDefault {
+			break
 		}
 	}
 
@@ -143,21 +167,21 @@ func (this *DockerRegister) getNetworkSettings(bindings, networks map[dockerapi.
 }
 
 func (this *DockerRegister) mapperPort(port string, container *dockerapi.Container) string {
-	portDefault := port
+	portRet := port
 
 	if port == "" {
 		for exposed := range container.Config.ExposedPorts {
 			if exposed.Port() != "" {
-				portDefault = exposed.Port()
+				portRet = exposed.Port()
 			}
 		}
 	}
 
-	if strings.Contains(portDefault, "/") {
-		return strings.Split(portDefault, "/")[0]
+	if strings.Contains(portRet, "/") {
+		return strings.Split(portRet, "/")[0]
 	}
 
-	return portDefault
+	return portRet
 }
 
 func (this *DockerRegister) mapperIP(ip string, container *dockerapi.Container) string {
@@ -168,15 +192,32 @@ func (this *DockerRegister) mapperIP(ip string, container *dockerapi.Container) 
 	return this.network.ResolverIP(ip)
 }
 
-func (this *DockerRegister) getServiceDomain(container *dockerapi.Container) (domain, endpoint string) {
+func (this *DockerRegister) getServiceDomain(container *dockerapi.Container) (string, string, string) {
+	var domain, endpoint, portDefault string
+
 	for _, env := range container.Config.Env {
 		if strings.HasPrefix(env, "SERVICE_DOMAIN") {
 			pairs := strings.Split(env, "=")[1]
-			domain := strings.Split(pairs, ":")[0]
-			endpoint := strings.Split(pairs, ":")[1]
-			return domain, endpoint
+			domain = strings.Split(pairs, ":")[0]
+			endpoint = strings.Split(pairs, ":")[1]
+			break
 		}
 	}
 
-	return "", ""
+	for _, env := range container.Config.Env {
+		if strings.HasPrefix(env, "SERVICE_PORT_DEFAULT") {
+			value := strings.Split(env, "=")[1]
+			if value != "" {
+				portDefault = value
+				break
+			}
+		}
+	}
+
+	return domain, endpoint, portDefault
+}
+
+func (this *DockerRegister) getServicePortDefault(container *dockerapi.Container) (port string) {
+
+	return ""
 }

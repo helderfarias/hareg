@@ -25,7 +25,7 @@ func setup() {
 func TestGetNetworkSettingsByNetwork(t *testing.T) {
 	networks[dockerapi.Port("100")] = []dockerapi.PortBinding{dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}, dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}}
 
-	ip, port := reg.getNetworkSettings(bindings, networks)
+	ip, port := reg.getNetworkSettings("", bindings, networks)
 
 	assert.Equal(t, "0.0.0.0", ip)
 	assert.Equal(t, "100", port)
@@ -35,7 +35,7 @@ func TestGetNetworkSettingsByNetwork(t *testing.T) {
 func TestGetNetworkSettingsByBindinds(t *testing.T) {
 	bindings[dockerapi.Port("100")] = []dockerapi.PortBinding{dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}, dockerapi.PortBinding{HostIP: "0.0.0.0", HostPort: "100"}}
 
-	ip, port := reg.getNetworkSettings(bindings, networks)
+	ip, port := reg.getNetworkSettings("", bindings, networks)
 
 	assert.Equal(t, "0.0.0.0", ip)
 	assert.Equal(t, "100", port)
