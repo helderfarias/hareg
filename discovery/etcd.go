@@ -13,7 +13,8 @@ type EtcdDiscovery struct {
 }
 
 func NewEtcdDiscovery(host string) *EtcdDiscovery {
-	etcdClient := etcd.NewClient([]string{host})
+	urls := makeEntries(host)
+	etcdClient := etcd.NewClient(urls)
 	return &EtcdDiscovery{etcdapi: etcdClient, url: host}
 }
 
