@@ -122,44 +122,34 @@ func (this *DockerRegister) getNetworkSettings(portDefault string, bindings, net
 	var hostIP, hostPort string
 
 	for port, published := range bindings {
-		if len(published) > 0 {
-			for _, item := range published {
-				if hostPort == portDefault {
-					hostIP = item.HostIP
-					hostPort = item.HostPort
-					break
-				} else {
-					hostIP = item.HostIP
-					hostPort = item.HostPort
-				}
-			}
-		} else {
-			hostPort = string(port)
-		}
+		hostPort = string(port)
 
-		if hostPort == portDefault {
+		if strings.HasPrefix(hostPort, portDefault) &&
+			len(published) > 0 {
+			hostIP = published[0].HostIP
+			hostPort = published[0].HostPort
 			break
+		} else {
+			for _, item := range published {
+				hostIP = item.HostIP
+				hostPort = item.HostPort
+			}
 		}
 	}
 
 	for port, published := range networks {
-		if len(published) > 0 {
-			for _, item := range published {
-				if hostPort == portDefault {
-					hostIP = item.HostIP
-					hostPort = item.HostPort
-					break
-				} else {
-					hostIP = item.HostIP
-					hostPort = item.HostPort
-				}
-			}
-		} else {
-			hostPort = string(port)
-		}
+		hostPort = string(port)
 
-		if hostPort == portDefault {
+		if strings.HasPrefix(hostPort, portDefault) &&
+			len(published) > 0 {
+			hostIP = published[0].HostIP
+			hostPort = published[0].HostPort
 			break
+		} else {
+			for _, item := range published {
+				hostIP = item.HostIP
+				hostPort = item.HostPort
+			}
 		}
 	}
 
@@ -215,9 +205,4 @@ func (this *DockerRegister) getServiceDomain(container *dockerapi.Container) (st
 	}
 
 	return domain, endpoint, portDefault
-}
-
-func (this *DockerRegister) getServicePortDefault(container *dockerapi.Container) (port string) {
-
-	return ""
 }
